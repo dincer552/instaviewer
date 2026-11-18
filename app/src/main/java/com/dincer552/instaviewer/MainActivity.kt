@@ -78,11 +78,11 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = true
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.setVisibility(View.VISIBLE)
+                    this@MainActivity.progress.setVisibility(View.VISIBLE)
                     status.text = "Sayfa yükleniyor…"
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.setVisibility(View.GONE)
+                    this@MainActivity.progress.setVisibility(View.GONE)
                     status.text = "Sayfa açıldı. Instagram bazı içerikler için giriş isteyebilir."
                 }
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
