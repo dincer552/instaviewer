@@ -2,6 +2,10 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+val appVersionCode = providers.gradleProperty("appVersionCode").orNull?.toIntOrNull() ?: 1
+val appVersionName = providers.gradleProperty("appVersionName").orNull ?: "1.0.0"
+val signingStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+
 android {
     namespace = "com.dincer552.instaviewer"
     compileSdk = 35
@@ -9,7 +13,25 @@ android {
         applicationId = "com.dincer552.instaviewer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+    signingConfigs {
+        create("releaseKey") {
+            if (!signingStorePath.isNullOrBlank()) {
+                storeFile = file(signingStorePath)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = "hattrickssh"
+                keyPassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (!signingStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("releaseKey")
+            }
+        }
     }
 }
