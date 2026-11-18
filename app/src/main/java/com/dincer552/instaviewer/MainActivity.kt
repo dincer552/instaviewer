@@ -43,7 +43,7 @@ class MainActivity : Activity() {
         input = EditText(this).apply {
             hint = "Instagram bağlantısını buraya yapıştır"
             textSize = 15f
-            singleLine = true
+            setSingleLine(true)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             setPadding(14, 12, 14, 12)
@@ -70,7 +70,7 @@ class MainActivity : Activity() {
             setPadding(2, 8, 2, 8)
         }
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            visibility = View.GONE
+            setVisibility(View.GONE)
         }
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -78,11 +78,11 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = true
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.visibility = View.VISIBLE
+                    progress.setVisibility(View.VISIBLE)
                     status.text = "Sayfa yükleniyor…"
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.visibility = View.GONE
+                    progress.setVisibility(View.GONE)
                     status.text = "Sayfa açıldı. Instagram bazı içerikler için giriş isteyebilir."
                 }
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
