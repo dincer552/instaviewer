@@ -132,109 +132,111 @@ class MainActivity : Activity() {
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
-
-            webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.setVisibility(View.VISIBLE)
-                    status.text = getString(R.string.status_loading)
-                    hasLoadedSuccessfully = false
-                    openBtn.isEnabled = false
-                    pasteBtn.isEnabled = false
-                    input.isEnabled = false
-                }
-
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.setVisibility(View.GONE)
-                    if (!hasLoadedSuccessfully) {
-                        hasLoadedSuccessfully = true
-                        status.text = getString(R.string.status_loaded)
-                        status.setTextColor(textSecondary)
-                    }
-                    openBtn.isEnabled = true
-                    pasteBtn.isEnabled = true
-                    input.isEnabled = true
-                }
-
-                override fun onReceivedError(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                    error: WebResourceError?
-                ) {
-                    if (request?.isForMainFrame == true) {
-                        progress.setVisibility(View.GONE)
-                        hasLoadedSuccessfully = false
-                        val errorMsg = when (error?.errorCode) {
-                            ERROR_CONNECT -> getString(R.string.error_no_internet)
-                            ERROR_TIMEOUT -> getString(R.string.error_timeout)
-                            ERROR_HOST_LOOKUP -> getString(R.string.error_host_lookup)
-                            ERROR_REDIRECT_LOOP -> getString(R.string.error_redirect_loop)
-                            ERROR_SSL_CERTIFICATE -> getString(R.string.error_ssl)
-                            else -> getString(R.string.error_generic)
-                        }
-                        status.text = errorMsg
-                        status.setTextColor(errorColor)
-                        showErrorToast(errorMsg)
-                    }
-                }
-
-                override fun onReceivedSslError(
-                    view: WebView?,
-                    handler: android.webkit.SslErrorHandler,
-                    error: android.net.http.SslError
-                ) {
-                    // SSL errors on main frame - don't proceed, show error
-                    if (view?.url == view?.originalUrl || view?.url?.startsWith("https://") == true) {
-                        handler.cancel()
-                        progress.setVisibility(View.GONE)
-                        hasLoadedSuccessfully = false
-                        val errorMsg = "${getString(R.string.error_ssl)}: ${error.primaryError}"
-                        status.text = errorMsg
-                        status.setTextColor(errorColor)
-                        showErrorToast(errorMsg)
-                    } else {
-                        handler.cancel()
-                    }
-                }
-
-                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url.toString()
-                    return shouldOverrideUrlLoading(view, url)
-                }
-
-                @Suppress("DEPRECATION")
-                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                    if (url == null) return false
-                    return if (url.startsWith("https://") || url.startsWith("http://")) {
-                        // Keep Instagram and HTTP/HTTPS links in WebView
-                        false
-                    } else {
-                        // External schemes (intent:, market:, etc.) - open externally
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        } catch (_: Exception) {
-                            Log.w("InstaViewer", "Failed to open external URL: $url")
-                        }
-                        true
-                    }
-                }
-            }
-
-            webChromeClient = object : WebChromeClient() {
-                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    progress.setProgress(newProgress)
-                }
-
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                    if (BuildConfig.DEBUG) {
-                        Log.d("InstaViewer-WebView", "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})")
-                    }
-                    return super.onConsoleMessage(consoleMessage)
-                }
-            }
-
-            setBackgroundColor(Color.BLACK)
-            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         }
+
+        // Create WebViewClient and WebChromeClient after web is initialized
+        // to ensure proper capture of 'progress' and other properties
+        web.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                progress.setVisibility(View.VISIBLE)
+                status.text = getString(R.string.status_loading)
+                hasLoadedSuccessfully = false
+                openBtn.isEnabled = false
+                pasteBtn.isEnabled = false
+                input.isEnabled = false
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                progress.setVisibility(View.GONE)
+                if (!hasLoadedSuccessfully) {
+                    hasLoadedSuccessfully = true
+                    status.text = getString(R.string.status_loaded)
+                    status.setTextColor(textSecondary)
+                }
+                openBtn.isEnabled = true
+                pasteBtn.isEnabled = true
+                input.isEnabled = true
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    progress.setVisibility(View.GONE)
+                    hasLoadedSuccessfully = false
+                    val errorMsg = when (error?.errorCode) {
+                        ERROR_CONNECT -> getString(R.string.error_no_internet)
+                        ERROR_TIMEOUT -> getString(R.string.error_timeout)
+                        ERROR_HOST_LOOKUP -> getString(R.string.error_host_lookup)
+                        ERROR_REDIRECT_LOOP -> getString(R.string.error_redirect_loop)
+                        ERROR_SSL_CERTIFICATE -> getString(R.string.error_ssl)
+                        else -> getString(R.string.error_generic)
+                    }
+                    status.text = errorMsg
+                    status.setTextColor(errorColor)
+                    showErrorToast(errorMsg)
+                }
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: android.webkit.SslErrorHandler,
+                error: android.net.http.SslError
+            ) {
+                // SSL errors on main frame - don't proceed, show error
+                if (view?.url == view?.originalUrl || view?.url?.startsWith("https://") == true) {
+                    handler.cancel()
+                    progress.setVisibility(View.GONE)
+                    hasLoadedSuccessfully = false
+                    val errorMsg = "${getString(R.string.error_ssl)}: ${error.primaryError}"
+                    status.text = errorMsg
+                    status.setTextColor(errorColor)
+                    showErrorToast(errorMsg)
+                } else {
+                    handler.cancel()
+                }
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url.toString()
+                return shouldOverrideUrlLoading(view, url)
+            }
+
+            @Suppress("DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                if (url == null) return false
+                return if (url.startsWith("https://") || url.startsWith("http://")) {
+                    // Keep Instagram and HTTP/HTTPS links in WebView
+                    false
+                } else {
+                    // External schemes (intent:, market:, etc.) - open externally
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    } catch (_: Exception) {
+                        Log.w("InstaViewer", "Failed to open external URL: $url")
+                    }
+                    true
+                }
+            }
+        }
+
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progress.setProgress(newProgress)
+            }
+
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                if (BuildConfig.DEBUG) {
+                    Log.d("InstaViewer-WebView", "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})")
+                }
+                return super.onConsoleMessage(consoleMessage)
+            }
+        }
+
+        web.setBackgroundColor(Color.BLACK)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
         root.addView(heading)
         root.addView(input, LinearLayout.LayoutParams(-1, -2))
