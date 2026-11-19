@@ -1,34 +1,107 @@
 name: Build and publish InstaViewer APK
+
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g., 1.0.5)'
+        required: false
+        type: string
+      version_code:
+        description: 'Version code (integer, must increment)'
+        required: false
+        type: string
+
 permissions:
   contents: write
+
+env:
+  GRADLE_VERSION: '8.9'
+  JAVA_VERSION: '17'
+  ANDROID_SDK_VERSION: '34'
+  ANDROID_BUILD_TOOLS_VERSION: '34.0.0'
+
 jobs:
-  build:
+  # PR validation job - runs on pull requests
+  pr-check:
+    name: PR Validation (Debug Build)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-${{ env.ANDROID_SDK_VERSION }} build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}"
+
+      - name: Build debug APK
+        run: |
+          gradle --no-daemon assembleDebug
+
+      - name: Verify debug APK exists
+        run: |
+          ls -la app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstaViewer-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  # Release build job - runs on main branch push or workflow_dispatch
+  release:
+    name: Release Build (Signed APK)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
-      APP_VERSION_CODE: ${{ github.run_number }}
-      APP_VERSION_NAME: 1.0.${{ github.run_number }}
+      # Version code increments with each run; version name uses semantic versioning
+      APP_VERSION_CODE: ${{ github.event.inputs.version_code || github.run_number }}
+      APP_VERSION_NAME: ${{ github.event.inputs.version_name || format('1.0.{0}', github.run_number) }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up JDK 17
+        with:
+          fetch-depth: 0  # Needed for git tags
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-35 build-tools;35.0.0"
+          packages: "platforms;android-${{ env.ANDROID_SDK_VERSION }} build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}"
+
       - name: Prepare existing signing key
         id: signing
         shell: bash
@@ -41,27 +114,55 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/instaviewer-signing.jks"
           printf "%s" "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           test -s "$KEYSTORE_PATH"
-          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias hattrickssh >/dev/null
+          # Verify the keystore has the expected alias
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias hattrickssh >/dev/null 2>&1 || {
+            echo "::error::Keystore does not contain alias 'hattrickssh'. Check your keystore."
+            exit 1
+          }
           echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
-        run: gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleDebug
-      - name: Upload debug APK
+        run: |
+          gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleDebug
+
+      - name: Upload debug APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: InstaViewer-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 7
+
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
-        run: gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleRelease
+        run: |
+          gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleRelease
+
+      - name: Prepare release APK for My App Store
+        if: steps.signing.outputs.configured == 'true'
+        run: |
+          # Default release APK name is app-release.apk, rename to instaviewer.apk for My App Store
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/instaviewer.apk
+
       - name: Verify signed APK
         if: steps.signing.outputs.configured == 'true'
         run: |
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/instaviewer.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/instaviewer.apk
+          APK_PATH="app/build/outputs/apk/release/instaviewer.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "::error::Release APK not found at $APK_PATH"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+          # Verify signature
+          "$ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}/apksigner" verify --verbose "$APK_PATH"
+          # Verify package ID
+          "$ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}/aapt2" dump badging "$APK_PATH" | grep "package: name='com.dincer552.instaviewer'"
+          # Verify version code
+          "$ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}/aapt2" dump badging "$APK_PATH" | grep "versionCode='$APP_VERSION_CODE'"
+
       - name: Publish signed InstaViewer release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.signing.outputs.configured == 'true'
+        if: github.ref == 'refs/heads/main' && steps.signing.outputs.configured == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.APP_VERSION_NAME }}
@@ -72,3 +173,12 @@ jobs:
           files: |
             app/build/outputs/apk/release/instaviewer.apk
           fail_on_unmatched_files: true
+
+      - name: Output release info
+        if: steps.signing.outputs.configured == 'true'
+        run: |
+          echo "Release APK: instaviewer.apk"
+          echo "Version Code: ${{ env.APP_VERSION_CODE }}"
+          echo "Version Name: ${{ env.APP_VERSION_NAME }}"
+          echo "Package ID: com.dincer552.instaviewer"
+          echo "My App Store Catalog ID: instaviewer"

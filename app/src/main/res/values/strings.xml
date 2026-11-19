@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">InstaViewer</string>
+    <string name="hint_instagram_url">Instagram bağlantısını buraya yapıştır</string>
+    <string name="btn_open_link">Bağlantıyı aç</string>
+    <string name="btn_paste">Panodan yapıştır</string>
+    <string name="status_initial">Herkese açık Instagram bağlantısını yapıştır veya Paylaş menüsünden gönder.</string>
+    <string name="status_loading">Sayfa yükleniyor…</string>
+    <string name="status_loaded">Sayfa açıldı. Instagram bazı içerikler için giriş isteyebilir.</string>
+    <string name="error_no_internet">İnternet bağlantısı yok.</string>
+    <string name="error_timeout">Bağlantı zaman aşımına uğradı.</string>
+    <string name="error_host_lookup">Sunucu bulunamadı.</string>
+    <string name="error_redirect_loop">Yönlendirme döngüsü tespit edildi.</string>
+    <string name="error_ssl">Güvenlik sertifikası hatası.</string>
+    <string name="error_generic">Sayfa yüklenemedi.</string>
+    <string name="error_invalid_url">Geçerli bir Instagram bağlantısı gir.</string>
+    <string name="error_clipboard_empty">Pano boş</string>
+</resources>

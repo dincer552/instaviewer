@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_background">#121218</color>
+    <color name="app_background">#121218</color>
+    <color name="surface_dark">#2A2A34</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#BBBBBB</color>
+    <color name="error_color">#FF6B6B</color>
+    <color name="progress_color">#E1306C</color>
+</resources>
