@@ -1,67 +1,180 @@
 name: Build and publish InstaViewer APK
+
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: instaviewer-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_VERSION_CODE: ${{ github.run_number }}
+  APP_VERSION_NAME: 1.0.${{ github.run_number }}
+  APK_SIGNING_SERVICE_URL: https://signer.dinceryuksek.com
+  SIGNING_OIDC_AUDIENCE: socialworst-apk-signer
+  ANDROID_BUILD_TOOLS_VERSION: 36.0.0
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      APP_VERSION_CODE: ${{ github.run_number }}
-      APP_VERSION_NAME: 1.0.${{ github.run_number }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  build-sign-release:
+    name: Test, build, centrally sign and publish
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platforms;android-35 build-tools;35.0.0"
-      - name: Prepare existing signing key
-        id: signing
+
+      - name: Validate My App Store catalog contract
         shell: bash
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Signed InstaViewer release skipped. Add the same persistent JKS secrets used by My App Store."
-            exit 0
-          fi
-          KEYSTORE_PATH="$RUNNER_TEMP/instaviewer-signing.jks"
-          printf "%s" "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-          test -s "$KEYSTORE_PATH"
-          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias hattrickssh >/dev/null
-          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-      - name: Build debug APK
-        run: gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleDebug
-      - name: Upload debug APK
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            https://raw.githubusercontent.com/dincer552/socialworst/main/app-catalog.json \
+            -o "$RUNNER_TEMP/app-catalog.json"
+          python3 - <<'PY'
+          import json, pathlib, sys
+          items = json.loads(pathlib.Path(sys.argv[1]).read_text()) if len(sys.argv) > 1 else json.loads(pathlib.Path("$RUNNER_TEMP/app-catalog.json").read_text())
+          expected = {
+              "id": "instaviewer",
+              "packageName": "com.dincer552.instaviewer",
+              "repository": "dincer552/instaviewer",
+              "assetName": "instaviewer.apk",
+          }
+          matches = [item for item in items if item.get("id") == expected["id"]]
+          if len(matches) != 1:
+              raise SystemExit("Catalog must contain exactly one instaviewer entry")
+          for key, value in expected.items():
+              if matches[0].get(key) != value:
+                  raise SystemExit(f"Catalog mismatch for {key}: {matches[0].get(key)!r}")
+          print("My App Store catalog contract: OK")
+          PY
+
+      - name: Run unit tests
+        run: |
+          gradle --no-daemon \
+            -PappVersionCode="$APP_VERSION_CODE" \
+            -PappVersionName="$APP_VERSION_NAME" \
+            testDebugUnitTest
+
+      - name: Build debug and unsigned release APKs
+        run: |
+          gradle --no-daemon \
+            -PappVersionCode="$APP_VERSION_CODE" \
+            -PappVersionName="$APP_VERSION_NAME" \
+            assembleDebug assembleRelease
+
+      - name: Locate and validate unsigned release APK
+        id: unsigned
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          test -s "$APK"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Verify central signer health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 2 \
+            "${APK_SIGNING_SERVICE_URL%/}/health" -o "$RUNNER_TEMP/signer-health.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("ok") is True and d.get("oidc") is True, d' "$RUNNER_TEMP/signer-health.json"
+          echo "Central OIDC signer is healthy."
+
+      - name: Obtain short-lived GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$SIGNING_OIDC_AUDIENCE")"
+          TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$RESPONSE")"
+          test -n "$TOKEN"
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Bootstrap or verify InstaViewer signing profile
+        env:
+          SIGNING_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors \
+            -X POST "${APK_SIGNING_SERVICE_URL%/}/v1/bootstrap" \
+            -H "Authorization: Bearer $SIGNING_OIDC_TOKEN" \
+            -F "key_id=instaviewer" \
+            -F "package_name=com.dincer552.instaviewer" \
+            -o "$RUNNER_TEMP/signing-profile.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("ok") is True and d.get("key_id") == "instaviewer" and d.get("package_name") == "com.dincer552.instaviewer", d; print("InstaViewer signing profile is ready.")' "$RUNNER_TEMP/signing-profile.json"
+
+      - name: Sign APK with central VM signer
+        env:
+          SIGNING_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors \
+            -X POST "${APK_SIGNING_SERVICE_URL%/}/v1/sign" \
+            -H "Authorization: Bearer $SIGNING_OIDC_TOKEN" \
+            -F "key_id=instaviewer" \
+            -F "apk=@${{ steps.unsigned.outputs.path }};type=application/vnd.android.package-archive" \
+            -o "$RUNNER_TEMP/instaviewer-signed.apk"
+          test -s "$RUNNER_TEMP/instaviewer-signed.apk"
+          install -D "$RUNNER_TEMP/instaviewer-signed.apk" app/build/outputs/apk/release/instaviewer.apk
+
+      - name: Verify signature, package, version and checksum
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/instaviewer.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/aapt"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/apk-signature.txt"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.dincer552.instaviewer' versionCode='$APP_VERSION_CODE' versionName='$APP_VERSION_NAME'"
+          SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          echo "$SHA256  instaviewer.apk" > app/build/outputs/apk/release/instaviewer.apk.sha256
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          grep -q 'Signer #1 certificate SHA-256 digest' "$RUNNER_TEMP/apk-signature.txt"
+          echo "Signed APK verification: OK ($SHA256)"
+
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaViewer-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: instaviewer-signed-${{ env.APP_VERSION_NAME }}
+          path: |
+            app/build/outputs/apk/release/instaviewer.apk
+            app/build/outputs/apk/release/instaviewer.apk.sha256
           if-no-files-found: error
-      - name: Build signed release APK
-        if: steps.signing.outputs.configured == 'true'
-        run: gradle --no-daemon -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME" assembleRelease
-      - name: Verify signed APK
-        if: steps.signing.outputs.configured == 'true'
-        run: |
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/instaviewer.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/instaviewer.apk
-      - name: Publish signed InstaViewer release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.signing.outputs.configured == 'true'
+          retention-days: 90
+
+      - name: Publish My App Store compatible GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.APP_VERSION_NAME }}
@@ -71,4 +184,13 @@ jobs:
           generate_release_notes: true
           files: |
             app/build/outputs/apk/release/instaviewer.apk
+            app/build/outputs/apk/release/instaviewer.apk.sha256
           fail_on_unmatched_files: true
+
+      - name: Print release summary
+        run: |
+          echo "Package: com.dincer552.instaviewer"
+          echo "Version: $APP_VERSION_NAME ($APP_VERSION_CODE)"
+          echo "Asset: instaviewer.apk"
+          echo "SHA-256: ${{ steps.verify.outputs.sha256 }}"
+          echo "Catalog ID: instaviewer"
