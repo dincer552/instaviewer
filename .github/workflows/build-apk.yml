@@ -73,6 +73,7 @@ jobs:
           print("My App Store catalog contract: OK")
           PY
 
+      - name: Run unit tests
         run: |
           gradle --no-daemon \
             -PappVersionCode="$APP_VERSION_CODE" \
