@@ -55,7 +55,7 @@ jobs:
           curl --fail --silent --show-error \
             https://raw.githubusercontent.com/dincer552/socialworst/main/app-catalog.json \
             -o "$RUNNER_TEMP/app-catalog.json"
-          python3 - <<'PY'
+          python3 - "$RUNNER_TEMP/app-catalog.json" <<'PY'
           import json, pathlib, sys
           items = json.loads(pathlib.Path(sys.argv[1]).read_text())
           expected = {
