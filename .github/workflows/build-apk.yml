@@ -57,7 +57,7 @@ jobs:
             -o "$RUNNER_TEMP/app-catalog.json"
           python3 - <<'PY'
           import json, pathlib, sys
-          items = json.loads(pathlib.Path(sys.argv[1]).read_text()) if len(sys.argv) > 1 else json.loads(pathlib.Path("$RUNNER_TEMP/app-catalog.json").read_text())
+          items = json.loads(pathlib.Path(sys.argv[1]).read_text())
           expected = {
               "id": "instaviewer",
               "packageName": "com.dincer552.instaviewer",
@@ -73,7 +73,6 @@ jobs:
           print("My App Store catalog contract: OK")
           PY
 
-      - name: Run unit tests
         run: |
           gradle --no-daemon \
             -PappVersionCode="$APP_VERSION_CODE" \
