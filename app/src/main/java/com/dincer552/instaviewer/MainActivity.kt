@@ -29,21 +29,21 @@ class MainActivity : Activity() {
     private lateinit var progress: ProgressBar
     private lateinit var downloadButton: Button
     private var activeUrl: String? = null
-    private val background = Color.rgb(12, 14, 22)
+    private val bgColor = Color.rgb(12, 14, 22)
     private val panel = Color.rgb(25, 29, 42)
     private val accent = Color.rgb(119, 92, 255)
     private val muted = Color.rgb(165, 172, 190)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = background
+        window.statusBarColor = bgColor
         window.navigationBarColor = Color.BLACK
         window.decorView.systemUiVisibility = 0
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(8))
-            setBackgroundColor(background)
+            setBackgroundColor(bgColor)
         }
         val brandRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -117,7 +117,7 @@ class MainActivity : Activity() {
         }
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             visibility = View.GONE
-            indeterminate = true
+            isIndeterminate = true
         }
         browser = WebView(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -130,10 +130,10 @@ class MainActivity : Activity() {
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.visibility = View.VISIBLE
+                    progress.setVisibility(View.VISIBLE)
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.visibility = View.GONE
+                    progress.setVisibility(View.GONE)
                     status.text = "İçerik açıldı. Oynatma, platformun erişim kurallarına bağlıdır."
                 }
                 override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
