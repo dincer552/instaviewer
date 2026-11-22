@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="true"
-        android:label="InstaViewer"
+        android:label="LinkViewer"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
@@ -24,6 +24,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="www.instagram.com" />
                 <data android:scheme="https" android:host="instagram.com" />
+                <data android:scheme="https" android:host="www.youtube.com" />
+                <data android:scheme="https" android:host="youtube.com" />
+                <data android:scheme="https" android:host="youtu.be" />
+                <data android:scheme="https" android:host="x.com" />
+                <data android:scheme="https" android:host="www.x.com" />
+                <data android:scheme="https" android:host="twitter.com" />
+                <data android:scheme="https" android:host="www.twitter.com" />
             </intent-filter>
         </activity>
     </application>
