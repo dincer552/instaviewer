@@ -130,10 +130,10 @@ class MainActivity : Activity() {
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.setVisibility(View.VISIBLE)
+                    this@MainActivity.progress.setVisibility(View.VISIBLE)
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.setVisibility(View.GONE)
+                    this@MainActivity.progress.setVisibility(View.GONE)
                     status.text = "İçerik açıldı. Oynatma, platformun erişim kurallarına bağlıdır."
                 }
                 override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
