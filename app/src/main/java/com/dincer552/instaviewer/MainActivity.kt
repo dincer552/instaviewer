@@ -213,7 +213,7 @@ class MainActivity : Activity() {
     }
 
     private fun extractUrl(raw: String): String? {
-        val candidate = Regex("""https?://[^\\s<>"']+""", RegexOption.IGNORE_CASE)
+        val candidate = Regex("""https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
             .find(raw)?.value?.trimEnd('.', ',', ')', ']', '!')
             ?: return null
         val uri = runCatching { Uri.parse(candidate) }.getOrNull() ?: return null
