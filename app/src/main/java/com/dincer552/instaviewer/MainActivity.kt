@@ -8,7 +8,6 @@ import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
-import androidx.navigation.ui.setupWithNavController
 import com.dincer552.instaviewer.util.LinkValidator
 
 class MainActivity : AppCompatActivity() {
@@ -38,7 +37,13 @@ class MainActivity : AppCompatActivity() {
         val bottomNavigation = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(
             R.id.bottom_navigation
         )
-        bottomNavigation.setupWithNavController(navController)
+        bottomNavigation.setOnMenuItemSelectedListener { item ->
+            val destinationId = item.itemId
+            if (destinationId != navController.currentDestination?.id) {
+                navController.navigate(destinationId)
+            }
+            true
+        }
 
         handleIntent(intent)
     }
