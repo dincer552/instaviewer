@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#7B4F9E</color>
+    <color name="colorPrimaryDark">#6B408A</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorSecondary">#64B5F6</color>
+    <color name="colorSecondaryContainer">#E3F2FD</color>
+    <color name="colorOnSecondary">#1A237E</color>
+    <color name="colorSurface">#12141A</color>
+    <color name="colorSurfaceVariant">#21262C</color>
+    <color name="colorOnSurface">#E0E0E0</color>
+    <color name="colorOnSurfaceVariant">#888888</color>
+    <color name="colorBackground">#12141A</color>
+    <color name="colorError">#FF5252</color>
+    <color name="colorErrorContainer">#FFCDD2</color>
+
+    <color name="amoledBlack">#000000</color>
+    <color name="amoledDarkest">#0A0A0A</color>
+    <color name="amoledDarker">#141414</color>
+    <color name="amoledDark">#1E1E1E</color>
+    <color name="amoledDarkMuted">#25292F</color>
+    <color name="amoledPanel">#252932</color>
+    <color name="amoledInputBg">#303540</color>
+    <color name="amoledChipBg">#2D323A</color>
+
+    <color name="textPrimary">#E0E0E0</color>
+    <color name="textSecondary">#888888</color>
+    <color name="textHint">#666666</color>
+    <color name="textCaption">#555555</color>
+    <color name="textInverse">#12141A</color>
+
+    <color name="progressActive">#7B4F9E</color>
+    <color name="progressInactive">#4A4A4A</color>
+
+    <color name="divider">#333333</color>
+
+    <color name="bottom_nav_item_color">#888888</color>
+    <color name="bottom_nav_selected_color">#7B4F9E</color>
+</resources>
