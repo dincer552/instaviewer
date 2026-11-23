@@ -117,14 +117,6 @@
         <item name="android:textColor">@color/textPrimary</item>
     </style>
 
-    <style name="Widget.LinkViewer.BottomNavigation" parent="Widget.Material3.Bottom NavigationView">
-        <item name="backgroundTint">@color/amoledPanel</item>
-        <item name="itemIconTint">@color/bottom_nav_item_color</item>
-        <item name="itemTextColor">@color/bottom_nav_item_color</item>
-        <item name="itemRippleColor">@color/colorPrimary</item>
-        <item name="labelVisibilityMode">labeled</item>
-    </style>
-
     <style name="Widget.LinkViewer.ProgressIndicator" parent="Widget.Material3.CircularProgressIndicator">
         <item name="indicatorColor">@color/colorPrimary</item>
         <item name="trackColor">@color/progressInactive</item>
