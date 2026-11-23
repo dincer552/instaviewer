@@ -2,7 +2,6 @@ package com.dincer552.instaviewer.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import java.util.Date
 
 @Entity(tableName = "downloads")
 data class DownloadItem(
@@ -15,6 +14,6 @@ data class DownloadItem(
     val fileSize: Long = 0,
     val downloadedBytes: Long = 0,
     val speed: Long = 0,
-    val timestamp: Date = Date(),
+    val timestamp: Long = System.currentTimeMillis(),
     val mimeType: String? = null
 )
