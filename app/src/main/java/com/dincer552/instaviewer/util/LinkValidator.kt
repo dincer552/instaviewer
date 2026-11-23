@@ -51,13 +51,15 @@ object LinkValidator {
         return when {
             host.contains("instagram.com") -> "Instagram"
             host.contains("youtube.com") || host.contains("youtu.be") -> "YouTube"
-            host.contains("x.com") || host.contains("twitter.com") || host.contains("t.co") -> "X / Twitter"
             host.contains("tiktok.com") -> "TikTok"
             host.contains("reddit.com") -> "Reddit"
             host.contains("facebook.com") -> "Facebook"
             host.contains("threads.net") -> "Threads"
             host.contains("vimeo.com") -> "Vimeo"
             host.contains("bsky.app") -> "Bluesky"
+            host.contains("twitter.com") -> "X / Twitter"
+            host == "x.com" || host.endsWith(".x.com") -> "X / Twitter"
+            host == "t.co" -> "X / Twitter"
             isDirectVideo(url) -> "Direct Media"
             else -> "Unknown"
         }
