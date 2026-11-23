@@ -27,12 +27,12 @@ interface MediaRepository {
     fun getDownloaded(): Flow<List<MediaItem>>
     fun searchMedia(query: String): Flow<List<MediaItem>>
     fun getByPlatform(platform: String): Flow<List<MediaItem>>
-    fun insertMedia(item: MediaItem): Long
+    suspend fun insertMedia(item: MediaItem): Long
     suspend fun toggleFavorite(id: Long, isFavorite: Boolean)
     suspend fun toggleDownloaded(id: Long, isDownloaded: Boolean, path: String? = null)
     suspend fun deleteMedia(id: Long)
     suspend fun clearAllMedia()
-    fun insertDownload(url: String, fileName: String): Long
+    suspend fun insertDownload(url: String, fileName: String): Long
     fun getDownloads(): Flow<List<DownloadItem>>
     suspend fun updateDownloadProgress(id: Long, progress: Int, downloaded: Long, speed: Long, status: String)
     suspend fun markDownloadCompleted(id: Long, path: String?)

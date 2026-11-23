@@ -4,8 +4,6 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -29,28 +27,24 @@ class MediaRepositoryImpl(
     override fun getByPlatform(platform: String): Flow<List<MediaItem>> =
         database.mediaContentDao().getByPlatform(platform).map { toMediaItems(it) }
 
-    override fun insertMedia(item: MediaItem): Long =
-        runCatching {
+    override suspend fun insertMedia(item: MediaItem): Long =
+        withContext(ioDispatcher) {
             database.mediaContentDao().insert(toEntity(item))
-        }.getOrDefault(-1L)
+        }
 
     override suspend fun toggleFavorite(id: Long, isFavorite: Boolean) =
         withContext(ioDispatcher) {
             database.mediaContentDao().setFavorite(id, isFavorite)
         }
 
-    override suspend fun toggleDownloaded(id: Long, isDownloaded: Boolean, path: String? = null) =
+    override suspend fun toggleDownloaded(id: Long, isDownloaded: Boolean, path: String?) =
         withContext(ioDispatcher) {
             database.mediaContentDao().setDownloaded(id, isDownloaded, path)
         }
 
     override suspend fun deleteMedia(id: Long) =
         withContext(ioDispatcher) {
-            val media = database.mediaContentDao().getAllMedia().firstOrNull()
-            if (media != null) {
-                val target = media.firstOrNull { it.id == id }
-                target?.let { database.mediaContentDao().delete(it) }
-            }
+            database.mediaContentDao().deleteById(id)
         }
 
     override suspend fun clearAllMedia() =
@@ -58,10 +52,10 @@ class MediaRepositoryImpl(
             database.mediaContentDao().deleteAll()
         }
 
-    override fun insertDownload(url: String, fileName: String): Long =
-        runCatching {
+    override suspend fun insertDownload(url: String, fileName: String): Long =
+        withContext(ioDispatcher) {
             database.downloadDao().insert(DownloadItem(url = url, fileName = fileName))
-        }.getOrDefault(-1L)
+        }
 
     override fun getDownloads(): Flow<List<DownloadItem>> =
         database.downloadDao().getAllDownloads()
@@ -91,7 +85,7 @@ class MediaRepositoryImpl(
                 thumbnailUrl = content.thumbnailUrl,
                 duration = content.duration,
                 author = content.author,
-                timestamp = content.timestamp.time,
+                timestamp = content.timestamp,
                 isFavorite = content.isFavorite,
                 isDownloaded = content.isDownloaded
             )
@@ -106,7 +100,7 @@ class MediaRepositoryImpl(
             thumbnailUrl = item.thumbnailUrl,
             duration = item.duration,
             author = item.author,
-            timestamp = java.util.Date(item.timestamp),
+            timestamp = item.timestamp,
             isFavorite = item.isFavorite,
             isDownloaded = item.isDownloaded
         )

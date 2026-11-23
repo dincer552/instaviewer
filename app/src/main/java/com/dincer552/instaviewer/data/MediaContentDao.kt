@@ -29,6 +29,9 @@ interface MediaContentDao {
     @Delete
     suspend fun delete(media: MediaContent)
 
+    @Query("DELETE FROM media_content WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Query("DELETE FROM media_content")
     suspend fun deleteAll()
 
