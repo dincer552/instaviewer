@@ -5,10 +5,13 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.navigation.NavController
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
+import androidx.navigation.ui.setupWithNavController
 import com.dincer552.instaviewer.util.LinkValidator
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,28 +25,33 @@ class MainActivity : AppCompatActivity() {
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         navController = navHostFragment.navController
 
-        val appBarConfiguration = AppBarConfiguration(setOf(
-            R.id.home_fragment,
-            R.id.media_fragment,
-            R.id.downloads_fragment,
-            R.id.favorites_fragment,
-            R.id.settings_fragment
-        ))
+        // Defensive: ensure graph is attached
+        try {
+            if (navController.currentDestination == null) {
+                navController.setGraph(R.navigation.nav_graph)
+            }
+        } catch (_: Exception) {
+            navController.setGraph(R.navigation.nav_graph)
+        }
+
+        val appBarConfiguration = AppBarConfiguration(
+            setOf(
+                R.id.home_fragment,
+                R.id.media_fragment,
+                R.id.downloads_fragment,
+                R.id.favorites_fragment,
+                R.id.settings_fragment
+            )
+        )
 
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
-        val bottomNavigation = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(
-            R.id.bottom_navigation
-        )
-        bottomNavigation.setOnItemSelectedListener { item ->
-            val destinationId = item.itemId
-            if (destinationId != navController.currentDestination?.id) {
-                navController.navigate(destinationId)
-            }
-            true
-        }
+        val bottomNavigation = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+
+        // Official helper keeps selected state, back-stack and singleTop behaviour correct
+        bottomNavigation.setupWithNavController(navController)
 
         handleIntent(intent)
     }
@@ -81,7 +89,32 @@ class MainActivity : AppCompatActivity() {
 
     private fun navigateToPlayer(url: String) {
         val bundle = Bundle().apply { putString("url", url) }
-        navController.navigate(R.id.action_navigation_home_to_player, bundle)
+        val options = NavOptions.Builder()
+            .setLaunchSingleTop(true)
+            .setEnterAnim(android.R.anim.fade_in)
+            .setExitAnim(android.R.anim.fade_out)
+            .build()
+
+        // Ensure we have a current destination before navigating
+        if (navController.currentDestination == null) {
+            navController.setGraph(R.navigation.nav_graph)
+        }
+
+        try {
+            when (navController.currentDestination?.id) {
+                R.id.home_fragment -> {
+                    navController.navigate(R.id.action_navigation_home_to_player, bundle, options)
+                }
+                else -> {
+                    // From any other tab: go to player directly
+                    navController.navigate(R.id.player_fragment, bundle, options)
+                }
+            }
+        } catch (e: IllegalStateException) {
+            // Last resort – graph may still be initializing
+            navController.navigate(R.id.home_fragment)
+            navController.navigate(R.id.player_fragment, bundle, options)
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
