@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
         val bottomNavigation = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(
             R.id.bottom_navigation
         )
-        bottomNavigation.setOnMenuItemSelectedListener { item ->
+        bottomNavigation.setOnItemSelectedListener { item ->
             val destinationId = item.itemId
             if (destinationId != navController.currentDestination?.id) {
                 navController.navigate(destinationId)
