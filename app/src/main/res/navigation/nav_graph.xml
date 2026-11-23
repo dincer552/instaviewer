@@ -14,6 +14,26 @@
     </fragment>
 
     <fragment
+        android:id="@+id/media_fragment"
+        android:name="com.dincer552.instaviewer.ui.screens.MediaFragment"
+        android:label="@string/nav_media" />
+
+    <fragment
+        android:id="@+id/downloads_fragment"
+        android:name="com.dincer552.instaviewer.ui.screens.DownloadsFragment"
+        android:label="@string/nav_downloads" />
+
+    <fragment
+        android:id="@+id/favorites_fragment"
+        android:name="com.dincer552.instaviewer.ui.screens.FavoritesFragment"
+        android:label="@string/nav_favorites" />
+
+    <fragment
+        android:id="@+id/settings_fragment"
+        android:name="com.dincer552.instaviewer.ui.screens.SettingsFragment"
+        android:label="@string/nav_settings" />
+
+    <fragment
         android:id="@+id/player_fragment"
         android:name="com.dincer552.instaviewer.ui.screens.PlayerFragment"
         android:label="@string/nav_media" />

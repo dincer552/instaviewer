@@ -23,7 +23,6 @@
         <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
 
         <item name="android:colorBackground">@color/colorBackground</item>
-        <item name="colorBackground">@color/colorBackground</item>
         <item name="colorOnBackground">@color/colorOnSurface</item>
 
         <item name="colorError">@color/colorError</item>
@@ -33,8 +32,6 @@
 
         <item name="colorOutline">@color/divider</item>
         <item name="colorOutlineVariant">@color/divider</item>
-
-        <item name="colorScrim">@color/amoledBlack</item>
 
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -120,7 +117,7 @@
         <item name="android:textColor">@color/textPrimary</item>
     </style>
 
-    <style name="Widget.LinkViewer.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
+    <style name="Widget.LinkViewer.BottomNavigation" parent="Widget.Material3.Bottom NavigationView">
         <item name="backgroundTint">@color/amoledPanel</item>
         <item name="itemIconTint">@color/bottom_nav_item_color</item>
         <item name="itemTextColor">@color/bottom_nav_item_color</item>
