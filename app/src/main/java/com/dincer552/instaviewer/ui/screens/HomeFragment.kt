@@ -13,38 +13,22 @@ import com.dincer552.instaviewer.R
 import com.dincer552.instaviewer.util.LinkValidator
 
 class HomeFragment : Fragment() {
+    private var rootView: View? = null
 
-    private var _rootView: View? = null
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
-        _rootView = view
-
-        val openButton = view.findViewById<Button>(R.id.open_button)
-        openButton?.setOnClickListener {
-            val input = view.findViewById<EditText>(R.id.link_input).text.toString().trim()
-            if (LinkValidator.isValidLink(input)) {
-                navigateToPlayer(input)
-            } else {
-                Toast.makeText(requireContext(), "Gecerli bir baglanti gir.", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        val pasteButton = view.findViewById<Button>(R.id.paste_button)
-        pasteButton?.setOnClickListener {
-            pasteFromClipboard()
-        }
-
-        val downloadButton = view.findViewById<Button>(R.id.direct_download_button)
-        downloadButton?.setOnClickListener {
-            Toast.makeText(requireContext(), "Dogru indirme henuz uygulanmadi.", Toast.LENGTH_SHORT).show()
-        }
-
+        rootView = view
+        view.findViewById<Button>(R.id.open_button)?.setOnClickListener { navigateFromInput() }
+        view.findViewById<Button>(R.id.paste_button)?.setOnClickListener { pasteFromClipboard() }
+        view.findViewById<Button>(R.id.direct_download_button)?.setOnClickListener { navigateFromInput() }
         return view
+    }
+
+    private fun navigateFromInput() {
+        val input = rootView?.findViewById<EditText>(R.id.link_input)?.text?.toString().orEmpty()
+        val url = LinkValidator.normalizeUrl(input)
+        if (url != null) navigateToPlayer(url)
+        else Toast.makeText(requireContext(), "Geçerli bir desteklenen bağlantı gir.", Toast.LENGTH_SHORT).show()
     }
 
     private fun pasteFromClipboard() {
@@ -53,18 +37,18 @@ class HomeFragment : Fragment() {
         if (clip != null && clip.itemCount > 0) {
             val text = clip.getItemAt(0).coerceToText(requireContext()).toString()
             val url = LinkValidator.extractUrl(text)
-            if (url != null) {
-                _rootView?.findViewById<EditText>(R.id.link_input)?.setText(url)
-            } else {
-                Toast.makeText(requireContext(), "Panoda gecerli bir baglanti bulunamadi.", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(requireContext(), "Pano bos.", Toast.LENGTH_SHORT).show()
-        }
+            if (url != null) rootView?.findViewById<EditText>(R.id.link_input)?.setText(url)
+            else Toast.makeText(requireContext(), "Panoda geçerli bir bağlantı bulunamadı.", Toast.LENGTH_SHORT).show()
+        } else Toast.makeText(requireContext(), "Pano boş.", Toast.LENGTH_SHORT).show()
     }
 
     private fun navigateToPlayer(url: String) {
-        val bundle = Bundle().apply { putString("url", url) }
-        findNavController().navigate(R.id.action_navigation_home_to_player, bundle)
+        val normalizedUrl = LinkValidator.normalizeUrl(url) ?: return
+        findNavController().navigate(R.id.action_navigation_home_to_player, Bundle().apply { putString("url", normalizedUrl) })
+    }
+
+    override fun onDestroyView() {
+        rootView = null
+        super.onDestroyView()
     }
 }
