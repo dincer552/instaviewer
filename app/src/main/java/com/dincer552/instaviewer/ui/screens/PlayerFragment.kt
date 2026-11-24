@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.dincer552.instaviewer.R
 import com.dincer552.instaviewer.util.LinkValidator
+import com.dincer552.instaviewer.util.DiagnosticsLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,6 +60,7 @@ class PlayerFragment : Fragment() {
         val url = currentUrl
         if (url == null) { showStatus("Geçerli bir bağlantı bulunamadı."); return root }
         currentPlatform = LinkValidator.detectPlatform(url)
+        DiagnosticsLog.add(requireContext(), "PLAYER_START", "Platform=$currentPlatform; ${DiagnosticsLog.safeUrl(url)}")
         optionsButton?.setOnClickListener { showDownloadOptions() }
         when (currentPlatform) {
             "Direct Media" -> startDirectMedia(url)
@@ -92,12 +94,15 @@ class PlayerFragment : Fragment() {
     private fun showInstagram(url: String) {
         val web = createWebView()
         optionsButton?.text = "İndirme seçenekleri"
-        showStatus("Instagram'ın resmi gömme oynatıcısı yükleniyor…")
+        showStatus("Instagram bağlantısı kontrol ediliyor…")
+        DiagnosticsLog.add(requireContext(), "INSTAGRAM_OEMBED_START", "oEmbed isteği başlıyor")
         viewLifecycleOwner.lifecycleScope.launch {
             val responseHtml = withContext(Dispatchers.IO) { fetchInstagramOEmbed(url) }
             if (!isAdded || mediaWebView !== web) return@launch
+            DiagnosticsLog.add(requireContext(), if (responseHtml != null) "INSTAGRAM_OEMBED_SUCCESS" else "INSTAGRAM_OEMBED_FALLBACK", if (responseHtml != null) "oEmbed HTML alındı" else "oEmbed yanıt vermedi; embed.js alternatifi deneniyor")
             val embed = responseHtml ?: instagramFallbackEmbed(url)
             web.loadDataWithBaseURL("https://www.instagram.com/", htmlDocument(embed, "Instagram içeriği"), "text/html", "UTF-8", null)
+            DiagnosticsLog.add(requireContext(), "INSTAGRAM_HTML_LOADED", "Embed HTML WebView içine yüklendi")
             if (responseHtml == null) showStatus("oEmbed yanıt vermedi; Instagram'ın yerleşik embed yöntemi deneniyor.")
         }
     }
@@ -158,18 +163,35 @@ class PlayerFragment : Fragment() {
             settings.loadWithOverviewMode = true
             settings.mediaPlaybackRequiresUserGesture = true
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                    DiagnosticsLog.add(requireContext(), "WEB_CONSOLE", "${message.messageLevel()}: ${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                    return true
+                }
+                override fun onProgressChanged(view: WebView?, progress: Int) {
+                    if (progress == 100) DiagnosticsLog.add(requireContext(), "WEB_PROGRESS", "page progress=100")
+                }
+            }
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) { statusText?.visibility = View.GONE }
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    DiagnosticsLog.add(requireContext(), "WEB_PAGE_STARTED", url?.let(DiagnosticsLog::safeUrl) ?: "url=null")
+                }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    DiagnosticsLog.add(requireContext(), "WEB_PAGE_FINISHED", url?.let(DiagnosticsLog::safeUrl) ?: "url=null")
+                    statusText?.visibility = View.GONE
+                }
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    if (request?.isForMainFrame == true) showStatus("İçerik yüklenemedi. Gönderi kaldırılmış, özel veya platform tarafından sınırlandırılmış olabilir.")
+                    DiagnosticsLog.add(requireContext(), "WEB_RESOURCE_ERROR", "mainFrame=${request?.isForMainFrame}; code=${error?.errorCode}; ${error?.description}")
+                    if (request?.isForMainFrame == true) showStatus("İçerik yüklenemedi. Loglar bölümünden hata ayrıntısını görebilirsin.")
                 }
             }
         }
+        DiagnosticsLog.add(requireContext(), "WEBVIEW_CREATE", "WebView hazırlanıyor")
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         rootContainer?.addView(web, 0, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         mediaWebView = web
+        DiagnosticsLog.add(requireContext(), "WEBVIEW_ATTACHED", "WebView root içine eklendi")
         return web
     }
 
@@ -186,10 +208,17 @@ class PlayerFragment : Fragment() {
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "LinkViewer-Android")
             }
-            if (connection.responseCode !in 200..299) return null
+            val responseCode = connection.responseCode
+            DiagnosticsLog.add(requireContext(), "INSTAGRAM_OEMBED_HTTP", "HTTP $responseCode")
+            if (responseCode !in 200..299) {
+                val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(400) }.getOrNull().orEmpty()
+                DiagnosticsLog.add(requireContext(), "INSTAGRAM_OEMBED_HTTP_ERROR", detail)
+                return null
+            }
             JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
                 .optString("html").takeIf { it.isNotBlank() }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            DiagnosticsLog.add(requireContext(), "INSTAGRAM_OEMBED_EXCEPTION", "oEmbed isteği başarısız", e)
             null
         } finally {
             connection?.disconnect()
@@ -229,6 +258,7 @@ class PlayerFragment : Fragment() {
 
     private fun showDownloadOptions() {
         val url = currentUrl ?: return
+        DiagnosticsLog.add(requireContext(), "DOWNLOAD_OPTIONS_OPEN", "Platform=$currentPlatform")
         when (currentPlatform) {
             "Direct Media" -> downloadDirectMedia(url)
             "Instagram" -> AlertDialog.Builder(requireContext())
@@ -278,10 +308,12 @@ class PlayerFragment : Fragment() {
                 fileName.endsWith(".mov", true) -> request.setMimeType("video/quicktime")
             }
             val manager = requireContext().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            manager.enqueue(request)
+            val downloadId = manager.enqueue(request)
+            DiagnosticsLog.add(requireContext(), "DOWNLOAD_QUEUED", "DownloadManager id=$downloadId; file=$fileName")
             Toast.makeText(requireContext(), "İndirme başlatıldı. Bildirimlerden takip edebilirsin.", Toast.LENGTH_LONG).show()
-        } catch (_: Exception) {
-            Toast.makeText(requireContext(), "İndirme başlatılamadı. Bağlantıyı kontrol et.", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            DiagnosticsLog.add(requireContext(), "DOWNLOAD_ERROR", "DownloadManager başlatılamadı", e)
+            Toast.makeText(requireContext(), "İndirme başlatılamadı. Logları kontrol et.", Toast.LENGTH_LONG).show()
         }
     }
 
