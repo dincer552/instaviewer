@@ -46,9 +46,11 @@ class PlayerFragment : Fragment() {
     private var pipButton: ImageButton? = null
     private var statusText: TextView? = null
     private var optionsButton: Button? = null
+    private var rootContainer: ViewGroup? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val root = inflater.inflate(R.layout.fragment_player, container, false)
+        rootContainer = root as? ViewGroup
         playerView = root.findViewById(R.id.player_view)
         pipButton = root.findViewById(R.id.pip_button)
         statusText = root.findViewById(R.id.player_status)
@@ -166,7 +168,7 @@ class PlayerFragment : Fragment() {
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
-        (view as? ViewGroup)?.addView(web, 0, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        rootContainer?.addView(web, 0, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         mediaWebView = web
         return web
     }
@@ -316,6 +318,7 @@ class PlayerFragment : Fragment() {
         playerView?.player = null
         mediaWebView?.apply { stopLoading(); loadUrl("about:blank"); removeAllViews(); destroy() }
         mediaWebView = null
+        rootContainer = null
         playerView = null
         pipButton = null
         statusText = null
