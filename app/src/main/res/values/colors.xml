@@ -15,6 +15,7 @@
     <color name="colorErrorContainer">#FFCDD2</color>
 
     <color name="amoledBlack">#000000</color>
+    <color name="launcherBackground">#24164D</color>
     <color name="amoledDarkest">#0A0A0A</color>
     <color name="amoledDarker">#141414</color>
     <color name="amoledDark">#1E1E1E</color>
