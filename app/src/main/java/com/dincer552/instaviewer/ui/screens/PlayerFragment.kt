@@ -378,12 +378,15 @@ class PlayerFragment : Fragment() {
         DiagnosticsLog.add(requireContext(), "DOWNLOAD_OPTIONS_OPEN", "Platform=$currentPlatform")
         when (currentPlatform) {
             "Direct Media" -> downloadDirectMedia(url)
-            "Instagram" -> AlertDialog.Builder(requireContext())
-                .setTitle("Instagram indirme seçenekleri")
-                .setMessage("Instagram'ın resmi oEmbed servisi herkese açık gönderileri uygulama içinde gösterir; video dosyasının indirme adresini vermez. Kendi Instagram içeriklerini Hesaplar Merkezi üzerinden indirebilirsin. Başkasına ait içerikleri yalnızca indirme iznin varsa kaydet.")
-                .setPositiveButton("Instagram'da aç") { _, _ -> openInAppOrBrowser(url, "com.instagram.android") }
-                .setNeutralButton("Kendi içeriklerimi indir") { _, _ -> openInBrowser("https://accountscenter.instagram.com/info_and_permissions/") }
-                .setNegativeButton("Kapat", null).show()
+            "Instagram" -> {
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Instagram video indirme")
+                    .setMessage("Herkese açık ve indirilebilir Reel videosunu LinkViewer üzerinden telefonunun İndirilenler klasörüne kaydedebilirsin. Yalnızca indirme hakkın olan içerikleri kaydet.")
+                    .setPositiveButton("Videoyu indir") { _, _ -> downloadInstagramVideo(url) }
+                    .setNeutralButton("Instagram'da aç") { _, _ -> openInAppOrBrowser(url, "com.instagram.android") }
+                    .setNegativeButton("Kapat", null)
+                    .show()
+            }
             "YouTube" -> AlertDialog.Builder(requireContext())
                 .setTitle("YouTube indirme seçenekleri")
                 .setMessage("YouTube'un geliştirici politikaları, YouTube videolarının üçüncü taraf uygulamalarda dosya olarak indirilmesini veya Premium dışı çevrimdışı oynatılmasını yasaklıyor. Premium üyeler desteklenen videoları YouTube uygulamasında çevrimdışı kaydedebilir. Kendi videolarını YouTube Studio'dan indirebilirsin.")
@@ -400,6 +403,47 @@ class PlayerFragment : Fragment() {
                 .setMessage("Bu platform bağlantısından doğrudan bir video dosyası alınamadı. Platformun resmi indirme seçeneklerini kullan.")
                 .setPositiveButton("Bağlantıyı aç") { _, _ -> openInBrowser(url) }
                 .setNegativeButton("Kapat", null).show()
+        }
+    }
+
+    private fun downloadInstagramVideo(permalink: String) {
+        val context = requireContext()
+        Toast.makeText(context, "İndirme bağlantısı hazırlanıyor…", Toast.LENGTH_SHORT).show()
+        DiagnosticsLog.add(context, "INSTAGRAM_DOWNLOAD_RESOLVE_START", "İndirme için yeni, kısa ömürlü akış bağlantısı isteniyor")
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val playback = withContext(Dispatchers.IO) { resolveInstagramStream(permalink) }
+            if (!isAdded) return@launch
+
+            if (playback == null) {
+                DiagnosticsLog.add(requireContext(), "INSTAGRAM_DOWNLOAD_RESOLVE_FAILED", "İndirme akış URL'si alınamadı")
+                Toast.makeText(requireContext(), "Bu Reel anonim olarak indirilemiyor. Video oynatılabiliyorsa tekrar dene.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            try {
+                val shortcode = Regex("/(?:reel|reels)/([A-Za-z0-9_-]+)")
+                    .find(Uri.parse(permalink).path.orEmpty())?.groupValues?.getOrNull(1)
+                    ?: "video"
+                val fileName = "Instagram_$shortcode.mp4"
+                val request = DownloadManager.Request(Uri.parse(BuildConfig.MEDIA_RESOLVER_BASE_URL.trimEnd('/') + playback.streamUrl))
+                    .setTitle(fileName)
+                    .setDescription("LinkViewer · Instagram Reel")
+                    .setMimeType("video/mp4")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(false)
+
+                val manager = requireContext().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val downloadId = manager.enqueue(request)
+                DiagnosticsLog.add(requireContext(), "INSTAGRAM_DOWNLOAD_QUEUED",
+                    "DownloadManager id=$downloadId; file=$fileName; resolver stream used")
+                Toast.makeText(requireContext(), "Video indirilmeye başladı. Bildirimlerden takip edebilirsin.", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                DiagnosticsLog.add(requireContext(), "INSTAGRAM_DOWNLOAD_ERROR", "Instagram Reel indirme kuyruğuna eklenemedi", e)
+                Toast.makeText(requireContext(), "İndirme başlatılamadı. Logları kontrol et.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
