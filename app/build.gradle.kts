@@ -19,6 +19,7 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "MEDIA_RESOLVER_BASE_URL", "\"https://signer.dinceryuksek.com\"")
     }
 
     signingConfigs {
@@ -41,6 +42,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
     buildTypes {
         release {

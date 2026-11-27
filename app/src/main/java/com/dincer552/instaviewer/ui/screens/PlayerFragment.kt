@@ -28,6 +28,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.dincer552.instaviewer.R
+import com.dincer552.instaviewer.BuildConfig
 import com.dincer552.instaviewer.util.LinkValidator
 import com.dincer552.instaviewer.util.DiagnosticsLog
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 class PlayerFragment : Fragment() {
+    private data class InstagramPlayback(val streamUrl: String, val durationSeconds: Double)
     private var exoPlayer: ExoPlayer? = null
     private var mediaWebView: WebView? = null
     private var currentUrl: String? = null
@@ -73,37 +75,152 @@ class PlayerFragment : Fragment() {
     }
 
     private fun startDirectMedia(url: String) {
-        playerView?.visibility = View.VISIBLE
-        pipButton?.visibility = View.VISIBLE
         optionsButton?.text = "Videoyu indir"
-        val exo = ExoPlayer.Builder(requireContext()).build()
-        exo.setMediaItem(MediaItem.fromUri(url))
-        exo.prepare()
-        exo.playWhenReady = true
-        exo.addListener(object : androidx.media3.common.Player.Listener {
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                showStatus("Video oynatılamadı. Bağlantı doğrudan ve erişilebilir bir medya dosyası olmalı.")
+        startNativeVideo(url, "DIRECT_MEDIA")
+    }
+
+    private fun startNativeVideo(mediaUrl: String, source: String) {
+        mediaWebView?.apply {
+            stopLoading()
+            (parent as? ViewGroup)?.removeView(this)
+            destroy()
+        }
+        mediaWebView = null
+
+        val appContext = requireContext().applicationContext
+        playerView?.visibility = View.VISIBLE
+        playerView?.useController = true
+        playerView?.controllerAutoShow = true
+        playerView?.controllerShowTimeoutMs = 5000
+        pipButton?.visibility = View.VISIBLE
+
+        try {
+            val exo = ExoPlayer.Builder(requireContext()).build()
+            exoPlayer = exo
+            playerView?.player = exo
+            exo.addListener(object : androidx.media3.common.Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    DiagnosticsLog.add(appContext, "NATIVE_PLAYER_STATE",
+                        "$source state=$playbackState; positionMs=${exo.currentPosition}; durationMs=${exo.duration}; seekable=${exo.isCurrentMediaItemSeekable}")
+                    if (playbackState == androidx.media3.common.Player.STATE_READY) {
+                        if (exo.isCurrentMediaItemSeekable && exo.duration > 0) {
+                            statusText?.visibility = View.GONE
+                            playerView?.showController()
+                            DiagnosticsLog.add(appContext, "NATIVE_PLAYER_SEEK_READY",
+                                "$source timeline enabled; durationMs=${exo.duration}")
+                        } else {
+                            showStatus("Video oynatılıyor ancak kaynak zaman atlatmayı desteklemiyor.")
+                            DiagnosticsLog.add(appContext, "NATIVE_PLAYER_NOT_SEEKABLE",
+                                "$source seekable=${exo.isCurrentMediaItemSeekable}; durationMs=${exo.duration}")
+                        }
+                    }
+                }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    DiagnosticsLog.add(appContext, "NATIVE_PLAYER_ERROR", "$source code=${error.errorCodeName}", error)
+                    showStatus("Video oynatılamadı: ${error.errorCodeName}. Logları kontrol et.")
+                }
+
+                override fun onPositionDiscontinuity(
+                    oldPosition: androidx.media3.common.Player.PositionInfo,
+                    newPosition: androidx.media3.common.Player.PositionInfo,
+                    reason: Int
+                ) {
+                    if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK) {
+                        DiagnosticsLog.add(appContext, "NATIVE_PLAYER_SEEK",
+                            "$source positionMs=${newPosition.positionMs}")
+                    }
+                }
+            })
+            exo.setMediaItem(MediaItem.fromUri(mediaUrl))
+            showStatus("Video akışı hazırlanıyor…")
+            exo.prepare()
+            exo.playWhenReady = true
+            pipButton?.setOnClickListener {
+                activity?.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
             }
-        })
-        exoPlayer = exo
-        playerView?.player = exo
-        statusText?.visibility = View.GONE
-        pipButton?.setOnClickListener { activity?.enterPictureInPictureMode(PictureInPictureParams.Builder().build()) }
+        } catch (e: Exception) {
+            DiagnosticsLog.add(appContext, "NATIVE_PLAYER_INIT_ERROR", "$source player init failed", e)
+            showStatus("Oynatıcı başlatılamadı: ${e.message}")
+        }
     }
 
     private fun showInstagram(url: String) {
-        val web = createWebView()
         optionsButton?.text = "İndirme seçenekleri"
-        showStatus("Instagram bağlantısı kontrol ediliyor…")
-        DiagnosticsLog.add(requireContext(), "INSTAGRAM_OEMBED_START", "oEmbed isteği başlıyor")
+        showStatus("Instagram Reel için kaydırılabilir video akışı aranıyor…")
+        DiagnosticsLog.add(requireContext(), "INSTAGRAM_NATIVE_RESOLVE_START", "Anonim public Reel resolver isteği başlıyor")
+
         viewLifecycleOwner.lifecycleScope.launch {
+            val playback = withContext(Dispatchers.IO) { resolveInstagramStream(url) }
+            if (!isAdded) return@launch
+            if (playback != null) {
+                DiagnosticsLog.add(requireContext(), "INSTAGRAM_NATIVE_RESOLVE_SUCCESS",
+                    "Range destekli akış alındı; durationSeconds=${playback.durationSeconds}")
+                startNativeVideo(playback.streamUrl, "INSTAGRAM_REEL")
+                return@launch
+            }
+
+            DiagnosticsLog.add(requireContext(), "INSTAGRAM_NATIVE_RESOLVE_FALLBACK",
+                "Bağımsız video akışı alınamadı; resmi embed oynatıcısına dönülüyor")
+            showStatus("Bu Reel için bağımsız akış alınamadı. Instagram'ın resmi oynatıcısı deneniyor…")
             val responseHtml = withContext(Dispatchers.IO) { fetchInstagramOEmbed(url) }
-            if (!isAdded || mediaWebView !== web) return@launch
-            DiagnosticsLog.add(requireContext(), if (responseHtml != null) "INSTAGRAM_OEMBED_SUCCESS" else "INSTAGRAM_OEMBED_FALLBACK", if (responseHtml != null) "oEmbed HTML alındı" else "oEmbed yanıt vermedi; embed.js alternatifi deneniyor")
+            if (!isAdded) return@launch
+
+            val web = createWebView()
             val embed = responseHtml ?: instagramFallbackEmbed(url)
-            web.loadDataWithBaseURL("https://www.instagram.com/", htmlDocument(embed, "Instagram içeriği"), "text/html", "UTF-8", null)
-            DiagnosticsLog.add(requireContext(), "INSTAGRAM_HTML_LOADED", "Embed HTML WebView içine yüklendi")
-            if (responseHtml == null) showStatus("oEmbed yanıt vermedi; Instagram'ın yerleşik embed yöntemi deneniyor.")
+            web.loadDataWithBaseURL("https://www.instagram.com/",
+                htmlDocument(embed, "Instagram içeriği"), "text/html", "UTF-8", null)
+            DiagnosticsLog.add(requireContext(),
+                if (responseHtml != null) "INSTAGRAM_OEMBED_SUCCESS" else "INSTAGRAM_OEMBED_FALLBACK",
+                if (responseHtml != null) "Resmi oEmbed HTML alındı" else "embed.js fallback kullanılıyor")
+            showStatus("Not: Instagram gömme oynatıcısında zaman çubuğu Instagram tarafından sunulmuyor.")
+        }
+    }
+
+    private fun resolveInstagramStream(url: String): InstagramPlayback? {
+        var connection: HttpURLConnection? = null
+        val appContext = requireContext().applicationContext
+        return try {
+            val normalized = LinkValidator.normalizeUrl(url) ?: return null
+            val baseUrl = BuildConfig.MEDIA_RESOLVER_BASE_URL.trimEnd('/')
+            connection = (URL("$baseUrl/v1/instagram/resolve").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 12_000
+                readTimeout = 35_000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "LinkViewer-Android")
+            }
+            val body = JSONObject().put("url", normalized).toString().toByteArray(Charsets.UTF_8)
+            connection.outputStream.use { it.write(body) }
+            val status = connection.responseCode
+            val responseText = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            DiagnosticsLog.add(appContext, "INSTAGRAM_RESOLVER_HTTP", "HTTP $status")
+            if (status !in 200..299) {
+                val detail = runCatching { JSONObject(responseText).optString("error") }
+                    .getOrDefault("Resolver yanıt vermedi")
+                DiagnosticsLog.add(appContext, "INSTAGRAM_RESOLVER_REJECTED", detail.take(300))
+                return null
+            }
+
+            val json = JSONObject(responseText)
+            val streamPath = json.optString("stream_url")
+            if (!streamPath.startsWith("/v1/instagram/stream/")) {
+                DiagnosticsLog.add(appContext, "INSTAGRAM_RESOLVER_INVALID_RESPONSE", "stream_url formatı geçersiz")
+                return null
+            }
+            val duration = json.optDouble("duration", 0.0)
+            val streamUrl = "$baseUrl$streamPath"
+            DiagnosticsLog.add(appContext, "INSTAGRAM_RESOLVER_STREAM_READY",
+                "seekSupported=${json.optBoolean("seek_supported")}; durationSeconds=$duration")
+            InstagramPlayback(streamUrl, duration)
+        } catch (e: Exception) {
+            DiagnosticsLog.add(appContext, "INSTAGRAM_RESOLVER_EXCEPTION", "Resolver bağlantısı kurulamadı", e)
+            null
+        } finally {
+            connection?.disconnect()
         }
     }
 
