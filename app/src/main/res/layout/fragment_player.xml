@@ -11,8 +11,6 @@
         android:layout_height="match_parent"
         android:visibility="gone"
         app:use_controller="true"
-        app:controller_auto_show="true"
-        app:controller_show_timeout="5000"
         app:show_buffering="when_playing"
         app:resize_mode="fit" />
 
